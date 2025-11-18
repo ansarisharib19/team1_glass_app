@@ -9,7 +9,7 @@ from datetime import datetime
 st.set_page_config(page_title="Team 1 – Glass Request Tool", layout="wide")
 
 MASTER_SHEET_CSV = "https://docs.google.com/spreadsheets/d/17SlnhEb2w4SI-gIix5qA5FQePcqQB51R6YgXl-vUVoE/export?format=csv"
-API_URL = "https://script.google.com/macros/s/AKfycbyhBhqJyivkr682gOnGOkqP9tGS5hGwSMQMptuFXBreSyhhYB4tHveTmhn1Bg2cj5T_OQ/exec"
+API_URL = "https://script.google.com/macros/s/AKfycbxCZvecfhqqxHbOJ6klz7GIjsOr1qA_Dvot6l3Ep7DTb-UmeFUNVW4MsJZSiPFvGtB__Q/exec"
 
 # --------------------------------------------------------
 # LOAD MASTER GLASS LIST
@@ -124,5 +124,6 @@ if st.button("➕ ADD REQUEST", use_container_width=True):
 
     else:
         st.error("❌ Failed to save to Google Sheets")
+
 
 
