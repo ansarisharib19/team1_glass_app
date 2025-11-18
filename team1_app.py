@@ -108,14 +108,14 @@ def render_form():
         success = save_to_google_sheets(new_entry)
 
         if success:
-            st.session_state.preview_data.append(new_entry)
-            st.success("✅ Request saved to Google Sheets!")
-
-            # Force reset form
-            st.session_state.form_nonce += 1
-            st.experimental_rerun()
-        else:
-            st.error("❌ Failed to save request")
+        st.session_state.preview_data.append(new_entry)
+        st.success("✅ Request saved to Google Sheets!")
+    
+        # Force reset form
+        st.session_state.form_nonce += 1
+        st.rerun()
+    else:
+        st.error("❌ Failed to save request")
 
 
 # ---------------------------------
@@ -139,3 +139,4 @@ if len(st.session_state.preview_data) > 0:
         file_name="all_requests.csv",
         mime="text/csv"
     )
+
