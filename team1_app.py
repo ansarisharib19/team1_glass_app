@@ -9,17 +9,24 @@ from datetime import datetime
 st.set_page_config(page_title="Team 1 – Glass Request Tool", layout="wide")
 
 MASTER_SHEET_CSV = "https://docs.google.com/spreadsheets/d/17SlnhEb2w4SI-gIix5qA5FQePcqQB51R6YgXl-vUVoE/export?format=csv"
-API_URL = "https://script.google.com/macros/s/AKfycbxCZvecfhqqxHbOJ6klz7GIjsOr1qA_Dvot6l3Ep7DTb-UmeFUNVW4MsJZSiPFvGtB__Q/exec"
+
+API_URL = "https://script.google.com/macros/s/AKfycbyu7SrPievCnS0w9UW2v6WMc46med_HpzRGh92lqpiNawFzvURKqaq3o6ffUPtaeb_YWg/exec"
+
 
 # --------------------------------------------------------
-# LOAD MASTER GLASS LIST
+# LOAD MASTER SHEET
 # --------------------------------------------------------
 @st.cache_data
 def load_master():
-    return pd.read_csv(MASTER_SHEET_CSV)
+    try:
+        return pd.read_csv(MASTER_SHEET_CSV)
+    except:
+        st.error("❌ Failed to load Glass Master sheet from Google Sheets.")
+        return pd.DataFrame(columns=["Glass Description"])
 
 master_df = load_master()
 glass_options = master_df["Glass Description"].dropna().unique().tolist()
+
 
 # --------------------------------------------------------
 # SQM CALCULATION
@@ -30,11 +37,31 @@ def calc_sqm_mm(h_mm, w_mm, qty):
     except:
         return 0
 
+
 # --------------------------------------------------------
-# UI
+# REQUEST NUMBER (Timestamp-based)
+# --------------------------------------------------------
+def generate_request_number():
+    now = datetime.now()
+    return now.strftime("%Y%m%d%H%M%S")
+
+
+# --------------------------------------------------------
+# SESSION STORAGE FOR REQUEST PREVIEW
+# --------------------------------------------------------
+if "added_requests" not in st.session_state:
+    st.session_state["added_requests"] = []
+
+
+# --------------------------------------------------------
+# TITLE
 # --------------------------------------------------------
 st.title("📦 Team 1 – Add New Glass Request")
 
+
+# --------------------------------------------------------
+# FORM UI
+# --------------------------------------------------------
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -56,31 +83,17 @@ with col3:
 
 remarks_t1 = st.text_area("Team 1 Remarks")
 
+# Calculate SQM
 sqm = calc_sqm_mm(height_mm, width_mm, qty)
 st.info(f"Calculated SQM: **{sqm:.3f} m²**")
 
-# --------------------------------------------------------
-# REQUEST NUMBER (simple increasing count)
-# --------------------------------------------------------
-def generate_request_number():
-    now = datetime.now()
-    return f"{now.strftime('%Y%m%d%H%M%S')}"
-
+# Generate Request Number
 request_number = generate_request_number()
 st.success(f"Auto Request Number: {request_number}")
 
-# --------------------------------------------------------
-# ADD REQUEST
-# --------------------------------------------------------
-# --------------------------------------------------------
-# SESSION STORAGE FOR REQUESTS
-# --------------------------------------------------------
-if "added_requests" not in st.session_state:
-    st.session_state["added_requests"] = []
-
 
 # --------------------------------------------------------
-# ADD REQUEST BUTTON HANDLER
+# ADD REQUEST HANDLER
 # --------------------------------------------------------
 if st.button("➕ ADD REQUEST", use_container_width=True):
 
@@ -101,29 +114,46 @@ if st.button("➕ ADD REQUEST", use_container_width=True):
         "Team 1 Remarks": remarks_t1
     }
 
-    # ---- SEND TO GOOGLE SHEETS API ----
-    response = requests.post(API_URL, json=new_row)
+    # Send to Google Sheets API
+    try:
+        response = requests.post(API_URL, json=new_row)
+        if response.status_code == 200:
+            st.success("✅ Request saved to Google Sheets!")
 
-    if response.status_code == 200:
-        st.success("✅ Request saved!")
+            # Save locally for preview
+            st.session_state["added_requests"].append(new_row)
 
-        # Store request locally for preview
-        st.session_state["added_requests"].append(new_row)
+            # Reset form values
+            st.session_state["project_code"] = ""
+            st.session_state["project"] = ""
+            st.session_state["customer"] = ""
+            st.session_state["project_sqm"] = 0.0
+            st.session_state["cutting"] = ""
+            st.session_state["height_mm"] = 0.0
+            st.session_state["width_mm"] = 0.0
+            st.session_state["qty"] = 0
+            st.session_state["wastage"] = 0.0
+            st.session_state["remarks_t1"] = ""
 
-        # RESET INPUTS
-        st.session_state["project_code"] = ""
-        st.session_state["project"] = ""
-        st.session_state["customer"] = ""
-        st.session_state["project_sqm"] = 0.0
-        st.session_state["cutting"] = ""
-        st.session_state["height_mm"] = 0.0
-        st.session_state["width_mm"] = 0.0
-        st.session_state["qty"] = 0
-        st.session_state["wastage"] = 0.0
-        st.session_state["remarks_t1"] = ""
-
-    else:
-        st.error("❌ Failed to save to Google Sheets")
-
+        else:
+            st.error("❌ Google Sheets API responded but failed to save.")
+    except Exception as e:
+        st.error(f"❌ Failed to send data to API: {e}")
 
 
+# --------------------------------------------------------
+# PREVIEW SECTION
+# --------------------------------------------------------
+if len(st.session_state["added_requests"]) > 0:
+    st.subheader("🔍 Preview – All Added Requests")
+
+    preview_df = pd.DataFrame(st.session_state["added_requests"])
+    st.dataframe(preview_df, use_container_width=True)
+
+    # Download All Requests
+    st.download_button(
+        label="⬇️ Download All Added Requests",
+        data=preview_df.to_csv(index=False).encode(),
+        file_name="All_Requests.csv",
+        mime="text/csv"
+    )
