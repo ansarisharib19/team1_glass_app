@@ -10,12 +10,31 @@ st.set_page_config(page_title="Team 1 – Glass Request Tool", layout="wide")
 
 API_URL = "https://script.google.com/macros/s/AKfycbyu7SrPievCnS0w9UW2v6WMc46med_HpzRGh92lqpiNawFzvURKqaq3o6ffUPtaeb_YWg/exec"
 
-glass_options = [
-    "5mm Pattern Glass Curves",
-    "5mm Fluted Glass",
-    "6mm Clear",
-    "8mm Clear"
-]
+# Glass Master Sheet (LIVE)
+GLASS_MASTER_CSV = "https://docs.google.com/spreadsheets/d/17SlnhEb2w4SI-gIix5qA5FQePcqQB51R6YgXl-vUVoE/export?format=csv&gid=1918780294"
+
+
+# ---------------------------------------------------------
+# LOAD GLASS MASTER LIVE FROM GOOGLE SHEETS
+# ---------------------------------------------------------
+@st.cache_data(ttl=300)  # refresh every 5 minutes
+def load_glass_master():
+    try:
+        df = pd.read_csv(GLASS_MASTER_CSV)
+        return df
+    except Exception as e:
+        st.error(f"❌ Failed to load Glass Master: {e}")
+        return pd.DataFrame()
+
+
+master_df = load_glass_master()
+
+if "Glass Description" in master_df.columns:
+    glass_options = master_df["Glass Description"].dropna().unique().tolist()
+else:
+    st.warning("⚠ 'Glass Description' column missing in Glass Master sheet.")
+    glass_options = []
+
 
 # ---------------------------------------------------------
 # SESSION STATE INIT
@@ -50,10 +69,10 @@ def save_to_google_sheets(data):
 
 
 # ---------------------------------------------------------
-# FORM (RESET USING NONCE)
+# FORM (RESET USING NONCE TRICK)
 # ---------------------------------------------------------
 def render_form():
-    nonce = st.session_state.form_nonce  # Forces refresh
+    nonce = st.session_state.form_nonce  # forces widget reset
 
     st.title("📦 Team 1 – Add New Glass Request")
 
@@ -112,9 +131,10 @@ def render_form():
             st.session_state.preview_data.append(new_entry)
             st.success("✅ Request saved to Google Sheets!")
 
-            # Reset the form by incrementing nonce
+            # Reset form
             st.session_state.form_nonce += 1
             st.rerun()
+
         else:
             st.error("❌ Failed to save request")
 
