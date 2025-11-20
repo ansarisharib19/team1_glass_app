@@ -47,12 +47,13 @@ glass_options = (
 
 
 # =========================================================
-# REQUEST NUMBER GENERATOR — MMYYNN-X
+# REQUEST NUMBER GENERATOR — FIXED VERSION
 # =========================================================
 def generate_request_number(project_code):
     """Generate request number based on:
     MMYYNN-X (month, year, project-seq, daily-instance)
     """
+
     try:
         df = pd.read_csv(REQUEST_SHEET_CSV)
     except:
@@ -65,21 +66,27 @@ def generate_request_number(project_code):
     project_code_str = str(project_code).strip()
 
     # -------------------------
-    # FIND PROJECT SEQUENCE NN
+    # CLEAN PROJECT LIST (NO BLANKS, ONLY NUMERIC)
     # -------------------------
     if "Project Code" in df.columns:
-        project_list = (
-            df["Project Code"].dropna().astype(str).str.strip().unique().tolist()
-        )
+        raw_codes = df["Project Code"].astype(str).str.strip().tolist()
+        valid_codes = [c for c in raw_codes if c.isdigit()]
     else:
-        project_list = []
+        valid_codes = []
 
+    # Remove duplicates while preserving order
+    project_list = []
+    for c in valid_codes:
+        if c not in project_list:
+            project_list.append(c)
+
+    # Determine NN
     if project_code_str in project_list:
         NN = project_list.index(project_code_str) + 1
     else:
         NN = len(project_list) + 1
 
-    NN_str = f"{NN:02d}"  # always 2 digits
+    NN_str = f"{NN:02d}"
 
     base_number = f"{MM}{YY}{NN_str}"
 
@@ -98,11 +105,9 @@ def generate_request_number(project_code):
         df_today = df_project[df_project["Date"].dt.date == today.date()]
         df_other_days = df_project[df_project["Date"].dt.date != today.date()]
 
-        # Same day = always instance 1
         if len(df_today) > 0:
-            X = 1
+            X = 1  # same-day = always 1
         else:
-            # Check last instance from earlier days
             if df_other_days.empty:
                 X = 1
             else:
