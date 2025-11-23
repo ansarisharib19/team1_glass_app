@@ -22,8 +22,9 @@ GLASS_MASTER_CSV = (
 )
 
 # Apps Script endpoint
-API_URL = "https://script.google.com/macros/s/AKfycbyu7SrPievCnS0w9UW2v6WMc46med_HpzRGh92lqpiNawFzvURKqaq3o6ffUPtaeb_YWg/exec"
-
+API_URL = (
+    "https://script.google.com/macros/s/AKfycbyu7SrPievCnS0w9UW2v6WMc46med_HpzRGh92lqpiNawFzvURKqaq3o6ffUPtaeb_YWg/exec"
+)
 
 # =========================================================
 # LOAD GLASS MASTER
@@ -45,13 +46,13 @@ glass_options = (
     else []
 )
 
-
 # =========================================================
 # REQUEST NUMBER GENERATOR — FIXED VERSION
 # =========================================================
 def generate_request_number(project_code):
-    """Generate request number based on:
-    MMYYNN-X (month, year, project-seq, daily-instance)
+    """Generate request number MMYYNN-X with:
+    NN  = project sequence
+    X   = daily instance
     """
 
     try:
@@ -66,7 +67,7 @@ def generate_request_number(project_code):
     project_code_str = str(project_code).strip()
 
     # -------------------------
-    # CLEAN PROJECT LIST (NO BLANKS, ONLY NUMERIC)
+    # CLEAN PROJECT LIST
     # -------------------------
     if "Project Code" in df.columns:
         raw_codes = df["Project Code"].astype(str).str.strip().tolist()
@@ -74,13 +75,13 @@ def generate_request_number(project_code):
     else:
         valid_codes = []
 
-    # Remove duplicates while preserving order
+    # Remove duplicates while keeping order
     project_list = []
     for c in valid_codes:
         if c not in project_list:
             project_list.append(c)
 
-    # Determine NN
+    # Determine NN (project sequence)
     if project_code_str in project_list:
         NN = project_list.index(project_code_str) + 1
     else:
@@ -91,7 +92,7 @@ def generate_request_number(project_code):
     base_number = f"{MM}{YY}{NN_str}"
 
     # -------------------------
-    # FIND INSTANCE NUMBER X
+    # DAILY INSTANCE NUMBER X
     # -------------------------
     if (
         "Project Code" in df.columns
@@ -106,7 +107,7 @@ def generate_request_number(project_code):
         df_other_days = df_project[df_project["Date"].dt.date != today.date()]
 
         if len(df_today) > 0:
-            X = 1  # same-day = always 1
+            X = 1
         else:
             if df_other_days.empty:
                 X = 1
@@ -122,7 +123,6 @@ def generate_request_number(project_code):
 
     return f"{base_number}-{X}"
 
-
 # =========================================================
 # SESSION STATE
 # =========================================================
@@ -131,7 +131,6 @@ if "preview_data" not in st.session_state:
 
 if "nonce" not in st.session_state:
     st.session_state.nonce = 0
-
 
 # =========================================================
 # SAVE TO GOOGLE SHEETS (APPS SCRIPT)
@@ -142,7 +141,6 @@ def save_to_google_sheets(data):
         return r.status_code == 200
     except:
         return False
-
 
 # =========================================================
 # FORM UI
@@ -213,12 +211,10 @@ def render_form():
             st.session_state.preview_data.append(new_entry)
             st.success("✅ Request saved successfully!")
 
-            # Reset form
             st.session_state.nonce += 1
             st.rerun()
         else:
             st.error("❌ Failed to save request.")
-
 
 # =========================================================
 # RENDER PAGE
