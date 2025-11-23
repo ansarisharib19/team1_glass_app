@@ -38,7 +38,6 @@ def load_glass_master():
         st.error(f"❌ Failed to load Glass Master: {e}")
         return pd.DataFrame()
 
-
 master_df = load_glass_master()
 glass_options = (
     master_df["Glass Description"].dropna().unique().tolist()
@@ -47,12 +46,12 @@ glass_options = (
 )
 
 # =========================================================
-# REQUEST NUMBER GENERATOR — FIXED VERSION
+# FINAL FIXED REQUEST NUMBER GENERATOR
 # =========================================================
 def generate_request_number(project_code):
     """Generate request number MMYYNN-X with:
-    NN  = project sequence
-    X   = daily instance
+    NN  = project sequence (per project code)
+    X   = daily instance (resets each day)
     """
 
     try:
@@ -63,36 +62,38 @@ def generate_request_number(project_code):
     today = datetime.today()
     MM = today.strftime("%m")
     YY = today.strftime("%y")
-
     project_code_str = str(project_code).strip()
 
     # -------------------------
-    # CLEAN PROJECT LIST
+    # CLEAN PROJECT LIST (NO blanks, NO garbage)
     # -------------------------
     if "Project Code" in df.columns:
-        raw_codes = df["Project Code"].astype(str).str.strip().tolist()
-        valid_codes = [c for c in raw_codes if c.isdigit()]
+        raw_codes = (
+            df["Project Code"].astype(str).str.strip().tolist()
+        )
+        valid_codes = [c for c in raw_codes if c.isdigit() and c != ""]
     else:
         valid_codes = []
 
-    # Remove duplicates while keeping order
+    # Unique but keep order
     project_list = []
     for c in valid_codes:
         if c not in project_list:
             project_list.append(c)
 
-    # Determine NN (project sequence)
+    # -------------------------
+    # CALCULATE PROJECT SEQUENCE (NN)
+    # -------------------------
     if project_code_str in project_list:
         NN = project_list.index(project_code_str) + 1
     else:
         NN = len(project_list) + 1
 
     NN_str = f"{NN:02d}"
-
     base_number = f"{MM}{YY}{NN_str}"
 
     # -------------------------
-    # DAILY INSTANCE NUMBER X
+    # CALCULATE INSTANCE NUMBER (X)
     # -------------------------
     if (
         "Project Code" in df.columns
@@ -106,6 +107,7 @@ def generate_request_number(project_code):
         df_today = df_project[df_project["Date"].dt.date == today.date()]
         df_other_days = df_project[df_project["Date"].dt.date != today.date()]
 
+        # Same day → ALWAYS X = 1
         if len(df_today) > 0:
             X = 1
         else:
@@ -133,7 +135,7 @@ if "nonce" not in st.session_state:
     st.session_state.nonce = 0
 
 # =========================================================
-# SAVE TO GOOGLE SHEETS (APPS SCRIPT)
+# SAVE TO GOOGLE SHEETS
 # =========================================================
 def save_to_google_sheets(data):
     try:
@@ -153,7 +155,7 @@ def render_form():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        date = st.date_input("Date", value=datetime.today(), key=f"date_{nonce}")
+        date = st.date_input("Date", datetime.today(), key=f"date_{nonce}")
         project_code = st.text_input("Project Code", key=f"project_code_{nonce}")
         project_name = st.text_input("Project Name", key=f"project_name_{nonce}")
         customer_name = st.text_input("Customer Name", key=f"customer_{nonce}")
@@ -161,15 +163,13 @@ def render_form():
     with col2:
         project_sqm = st.number_input("Project SQM", min_value=0.0, key=f"sqm_{nonce}")
         cutting = st.text_input("Cutting list received", key=f"cutting_{nonce}")
-        glass_desc = st.selectbox(
-            "Glass Description", glass_options, key=f"glass_{nonce}"
-        )
+        glass_desc = st.selectbox("Glass Description", glass_options, key=f"glass_{nonce}")
 
     with col3:
-        height = st.number_input("Glass Height (mm)", min_value=0.0, key=f"h_{nonce}")
-        width = st.number_input("Glass Width (mm)", min_value=0.0, key=f"w_{nonce}")
-        qty = st.number_input("Optimize Qty", min_value=0, key=f"qty_{nonce}")
-        wastage = st.number_input("Wastage %", min_value=0.0, key=f"wast_{nonce}")
+        height = st.number_input("Glass Height (mm)", 0.0, key=f"h_{nonce}")
+        width = st.number_input("Glass Width (mm)", 0.0, key=f"w_{nonce}")
+        qty = st.number_input("Optimize Qty", 0, key=f"qty_{nonce}")
+        wastage = st.number_input("Wastage %", 0.0, key=f"wast_{nonce}")
 
     remarks = st.text_area("Team 1 Remarks", key=f"remarks_{nonce}")
 
@@ -210,7 +210,6 @@ def render_form():
         if ok:
             st.session_state.preview_data.append(new_entry)
             st.success("✅ Request saved successfully!")
-
             st.session_state.nonce += 1
             st.rerun()
         else:
