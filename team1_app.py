@@ -136,7 +136,7 @@ def save_to_google_sheets(data):
 def render_form():
     nonce = st.session_state.nonce
 
-    st.title("📦 Team 1 – Add New Glass Request")
+    st.title("Data Entry – Add New Glass Request")
 
     col1, col2, col3 = st.columns(3)
 
@@ -220,4 +220,5 @@ if len(st.session_state.preview_data) > 0:
         file_name="all_requests.csv",
         mime="text/csv",
     )
+
 
