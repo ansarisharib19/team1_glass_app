@@ -190,7 +190,7 @@ def render_form():
 
         new_entry = {
             "Request #": request_number,
-            "Date": str(date),
+            "Date": date.strftime("%Y-%m-%d"),
             "Customer Name": customer_name,
             "Project Code": project_code,
             "Project Name": project_name,
@@ -234,4 +234,5 @@ if len(st.session_state.preview_data) > 0:
         file_name="all_requests.csv",
         mime="text/csv",
     )
+
 
