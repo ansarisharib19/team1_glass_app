@@ -9,19 +9,16 @@ st.set_page_config(page_title="Team 1 – Glass Request Tool", layout="wide")
 # GOOGLE SHEET LINKS
 # =========================================================
 
-# Request sheet (LIVE)
 REQUEST_SHEET_CSV = (
     "https://docs.google.com/spreadsheets/d/"
     "1zCHYqqRwaekDMPj5uNxwOXnm92CnBffx_hbDzbJwSx8/export?format=csv"
 )
 
-# Glass Master (LIVE)
 GLASS_MASTER_CSV = (
     "https://docs.google.com/spreadsheets/d/"
     "17SlnhEb2w4SI-gIix5qA5FQePcqQB51R6YgXl-vUVoE/export?format=csv&gid=1918780294"
 )
 
-# Apps Script endpoint
 API_URL = (
     "https://script.google.com/macros/s/AKfycbyu7SrPievCnS0w9UW2v6WMc46med_HpzRGh92lqpiNawFzvURKqaq3o6ffUPtaeb_YWg/exec"
 )
@@ -34,8 +31,7 @@ def load_glass_master():
     try:
         df = pd.read_csv(GLASS_MASTER_CSV)
         return df
-    except Exception as e:
-        st.error(f"❌ Failed to load Glass Master: {e}")
+    except:
         return pd.DataFrame()
 
 master_df = load_glass_master()
@@ -45,15 +41,13 @@ glass_options = (
     else []
 )
 
+
 # =========================================================
-# FINAL FIXED REQUEST NUMBER GENERATOR
+# FIXED REQUEST NUMBER GENERATOR
 # =========================================================
 def generate_request_number(project_code):
-    """Generate request number MMYYNN-X with:
-    NN  = project sequence (per project code)
-    X   = daily instance (resets each day)
-    """
 
+    # Load sheet
     try:
         df = pd.read_csv(REQUEST_SHEET_CSV)
     except:
@@ -62,77 +56,75 @@ def generate_request_number(project_code):
     today = datetime.today()
     MM = today.strftime("%m")
     YY = today.strftime("%y")
+    today_date = today.date()
+
     project_code_str = str(project_code).strip()
 
-    # -------------------------
-    # CLEAN PROJECT LIST (NO blanks, NO garbage)
-    # -------------------------
+    # --------------------------------------------
+    # CLEAN PROJECT LIST FOR SEQUENCE (NN)
+    # --------------------------------------------
     if "Project Code" in df.columns:
-        raw_codes = (
-            df["Project Code"].astype(str).str.strip().tolist()
-        )
+        raw_codes = df["Project Code"].astype(str).str.strip().tolist()
         valid_codes = [c for c in raw_codes if c.isdigit() and c != ""]
     else:
         valid_codes = []
 
-    # Unique but keep order
+    # unique while preserving order
     project_list = []
     for c in valid_codes:
         if c not in project_list:
             project_list.append(c)
 
-    # -------------------------
-    # CALCULATE PROJECT SEQUENCE (NN)
-    # -------------------------
+    # NN = sequence number of the project
     if project_code_str in project_list:
         NN = project_list.index(project_code_str) + 1
     else:
         NN = len(project_list) + 1
 
     NN_str = f"{NN:02d}"
-    base_number = f"{MM}{YY}{NN_str}"
+    base = f"{MM}{YY}{NN_str}"
 
-    # -------------------------
-    # CALCULATE INSTANCE NUMBER (X)
-    # -------------------------
-    if (
-        "Project Code" in df.columns
-        and "Date" in df.columns
-        and "Request #" in df.columns
-    ):
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    # --------------------------------------------
+    # FIX: STRICT DATE PARSING
+    # --------------------------------------------
+    if "Date" in df.columns:
+        df["Date"] = pd.to_datetime(
+            df["Date"], 
+            format="%Y-%m-%d",
+            errors="coerce"
+        )
+        df = df.dropna(subset=["Date"])
 
-        df_project = df[df["Project Code"].astype(str).str.strip() == project_code_str]
+    else:
+        return f"{base}-1"
 
-        df_today = df_project[df_project["Date"].dt.date == today.date()]
-        df_other_days = df_project[df_project["Date"].dt.date != today.date()]
+    # Filter rows for this project
+    df_project = df[df["Project Code"].astype(str).str.strip() == project_code_str]
 
-        # Same day → ALWAYS X = 1
-        if len(df_today) > 0:
+    if df_project.empty:
+        return f"{base}-1"
+
+    df_project["date_only"] = df_project["Date"].dt.date
+
+    df_today = df_project[df_project["date_only"] == today_date]
+    df_before = df_project[df_project["date_only"] != today_date]
+
+    # same day → always X = 1
+    if len(df_today) > 0:
+        X = 1
+    else:
+        if df_before.empty:
             X = 1
         else:
-            if df_other_days.empty:
+            last_req = str(df_before.iloc[0]["Request #"])
+            try:
+                last_x = int(last_req.split("-")[1])
+                X = last_x + 1
+            except:
                 X = 1
-            else:
-                last_req = str(df_other_days.iloc[0]["Request #"])
-                try:
-                    last_x = int(last_req.split("-")[1])
-                    X = last_x + 1
-                except:
-                    X = 1
-    else:
-        X = 1
 
-    return f"{base_number}-{X}"
+    return f"{base}-{X}"
 
-# =========================================================
-# SESSION STATE
-# =========================================================
-if "preview_data" not in st.session_state:
-    st.session_state.preview_data = []
-
-if "nonce" not in st.session_state:
-    st.session_state.nonce = 0
 
 # =========================================================
 # SAVE TO GOOGLE SHEETS
@@ -143,6 +135,17 @@ def save_to_google_sheets(data):
         return r.status_code == 200
     except:
         return False
+
+
+# =========================================================
+# SESSION STATE
+# =========================================================
+if "preview_data" not in st.session_state:
+    st.session_state.preview_data = []
+
+if "nonce" not in st.session_state:
+    st.session_state.nonce = 0
+
 
 # =========================================================
 # FORM UI
@@ -176,20 +179,19 @@ def render_form():
     sqm = (height / 1000) * (width / 1000) * qty
     st.info(f"Calculated SQM: **{sqm:.4f} m²**")
 
-    # Generate request number
     if project_code:
-        request_number = generate_request_number(project_code)
-        st.success(f"Auto Request Number: {request_number}")
+        req_num = generate_request_number(project_code)
+        st.success(f"Auto Request Number: {req_num}")
     else:
-        request_number = None
+        req_num = None
 
     if st.button("➕ ADD REQUEST", use_container_width=True):
         if not project_code:
-            st.error("Project Code is required.")
+            st.error("Project Code is required!")
             return
 
         new_entry = {
-            "Request #": request_number,
+            "Request #": req_num,
             "Date": date.strftime("%Y-%m-%d"),
             "Customer Name": customer_name,
             "Project Code": project_code,
@@ -205,34 +207,24 @@ def render_form():
             "Team 1 Remarks": remarks,
         }
 
-        ok = save_to_google_sheets(new_entry)
-
-        if ok:
+        if save_to_google_sheets(new_entry):
             st.session_state.preview_data.append(new_entry)
-            st.success("✅ Request saved successfully!")
+            st.success("✅ Request saved!")
             st.session_state.nonce += 1
             st.rerun()
         else:
             st.error("❌ Failed to save request.")
 
+
 # =========================================================
-# RENDER PAGE
+# RENDER
 # =========================================================
 render_form()
 
-# =========================================================
-# PREVIEW TABLE
-# =========================================================
 if len(st.session_state.preview_data) > 0:
     st.subheader("🔍 Preview – Added Requests")
     df_prev = pd.DataFrame(st.session_state.preview_data)
     st.dataframe(df_prev, use_container_width=True)
 
     st.download_button(
-        "⬇️ Download All Requests",
-        data=df_prev.to_csv(index=False).encode(),
-        file_name="all_requests.csv",
-        mime="text/csv",
-    )
-
-
+        "⬇️ Download All Request
