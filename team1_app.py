@@ -29,8 +29,7 @@ API_URL = (
 @st.cache_data(ttl=300)
 def load_glass_master():
     try:
-        df = pd.read_csv(GLASS_MASTER_CSV)
-        return df
+        return pd.read_csv(GLASS_MASTER_CSV)
     except:
         return pd.DataFrame()
 
@@ -41,13 +40,10 @@ glass_options = (
     else []
 )
 
-
 # =========================================================
 # FIXED REQUEST NUMBER GENERATOR
 # =========================================================
 def generate_request_number(project_code):
-
-    # Load sheet
     try:
         df = pd.read_csv(REQUEST_SHEET_CSV)
     except:
@@ -60,22 +56,21 @@ def generate_request_number(project_code):
 
     project_code_str = str(project_code).strip()
 
-    # --------------------------------------------
-    # CLEAN PROJECT LIST FOR SEQUENCE (NN)
-    # --------------------------------------------
+    # ----------------------------
+    # CLEAN PROJECT LIST FOR NN
+    # ----------------------------
     if "Project Code" in df.columns:
         raw_codes = df["Project Code"].astype(str).str.strip().tolist()
         valid_codes = [c for c in raw_codes if c.isdigit() and c != ""]
     else:
         valid_codes = []
 
-    # unique while preserving order
     project_list = []
     for c in valid_codes:
         if c not in project_list:
             project_list.append(c)
 
-    # NN = sequence number of the project
+    # NN = project sequence
     if project_code_str in project_list:
         NN = project_list.index(project_code_str) + 1
     else:
@@ -84,21 +79,18 @@ def generate_request_number(project_code):
     NN_str = f"{NN:02d}"
     base = f"{MM}{YY}{NN_str}"
 
-    # --------------------------------------------
-    # FIX: STRICT DATE PARSING
-    # --------------------------------------------
+    # ----------------------------
+    # STRICT DATE PARSING FIX
+    # ----------------------------
     if "Date" in df.columns:
         df["Date"] = pd.to_datetime(
-            df["Date"], 
-            format="%Y-%m-%d",
-            errors="coerce"
+            df["Date"], format="%Y-%m-%d", errors="coerce"
         )
         df = df.dropna(subset=["Date"])
-
     else:
         return f"{base}-1"
 
-    # Filter rows for this project
+    # Filter data for matching project code
     df_project = df[df["Project Code"].astype(str).str.strip() == project_code_str]
 
     if df_project.empty:
@@ -107,24 +99,24 @@ def generate_request_number(project_code):
     df_project["date_only"] = df_project["Date"].dt.date
 
     df_today = df_project[df_project["date_only"] == today_date]
-    df_before = df_project[df_project["date_only"] != today_date]
+    df_prev = df_project[df_project["date_only"] != today_date]
 
-    # same day → always X = 1
+    # SAME DAY → ALWAYS X = 1
     if len(df_today) > 0:
+        return f"{base}-1"
+
+    # DIFFERENT DAY → X = last_x + 1
+    if df_prev.empty:
+        return f"{base}-1"
+
+    last_req = str(df_prev.iloc[0]["Request #"])
+    try:
+        last_x = int(last_req.split("-")[1])
+        X = last_x + 1
+    except:
         X = 1
-    else:
-        if df_before.empty:
-            X = 1
-        else:
-            last_req = str(df_before.iloc[0]["Request #"])
-            try:
-                last_x = int(last_req.split("-")[1])
-                X = last_x + 1
-            except:
-                X = 1
 
     return f"{base}-{X}"
-
 
 # =========================================================
 # SAVE TO GOOGLE SHEETS
@@ -136,7 +128,6 @@ def save_to_google_sheets(data):
     except:
         return False
 
-
 # =========================================================
 # SESSION STATE
 # =========================================================
@@ -145,7 +136,6 @@ if "preview_data" not in st.session_state:
 
 if "nonce" not in st.session_state:
     st.session_state.nonce = 0
-
 
 # =========================================================
 # FORM UI
@@ -215,16 +205,22 @@ def render_form():
         else:
             st.error("❌ Failed to save request.")
 
-
 # =========================================================
-# RENDER
+# RENDER UI
 # =========================================================
 render_form()
 
+# =========================================================
+# PREVIEW TABLE
+# =========================================================
 if len(st.session_state.preview_data) > 0:
     st.subheader("🔍 Preview – Added Requests")
     df_prev = pd.DataFrame(st.session_state.preview_data)
     st.dataframe(df_prev, use_container_width=True)
 
     st.download_button(
-        "⬇️ Download All Request
+        "⬇️ Download All Requests",
+        data=df_prev.to_csv(index=False).encode(),
+        file_name="all_requests.csv",
+        mime="text/csv",
+    )
