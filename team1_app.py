@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 from datetime import datetime
 
-st.set_page_config(page_title="Team 1 – Glass Request Tool", layout="wide")
+st.set_page_config(page_title="Data Entry – Glass Request Tool", layout="wide")
 
 # =========================================================
 # GOOGLE SHEET LINKS
@@ -220,3 +220,4 @@ if len(st.session_state.preview_data) > 0:
         file_name="all_requests.csv",
         mime="text/csv",
     )
+
